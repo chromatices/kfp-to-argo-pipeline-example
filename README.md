@@ -26,3 +26,6 @@ kubectl apply -f https://raw.githubusercontent.com/kubeflow/manifests/5b1256f19a
 
 - In `utils/`, `pipeline-sample.yaml` has information about kubeflow pipelines. It made by python package `kfp`.    
 - If you apply to your kfp, update your kfp yaml and edited `run-yaml.sh`'s last line.    
+
+---------------------
+- This work was supported by Institute for Information & communications Technology Promotion(IITP) grant funded by the Korea government(MSIT) (No.2021-0-00281, Development of highly integrated operator resource deployment optimization technology to maximize performance efficiency of high-load complex machine learning workloads in a hybrid cloud environment)
