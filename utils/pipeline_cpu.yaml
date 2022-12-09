@@ -1,0 +1,159 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: example-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.6, pipelines.kubeflow.org/pipeline_compilation_time: '2022-06-17T17:19:32.098358',
+    pipelines.kubeflow.org/pipeline_spec: '{"description": "demo of kubeflow pipeline",
+      "inputs": [{"default": "https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2",
+      "name": "dataset", "optional": true}, {"default": "/mnt/kubeflow", "name": "directory",
+      "optional": true}, {"default": "16", "name": "batch_size", "optional": true},
+      {"default": "0.001", "name": "learning_rate", "optional": true}, {"default":
+      "1", "name": "log_step", "optional": true}, {"default": "1", "name": "save_step",
+      "optional": true}, {"default": "1", "name": "epochs", "optional": true}], "name":
+      "example"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.6}
+  namespace: argo-test
+spec:
+  entrypoint: example
+  templates:
+  - name: dataset-download
+    container:
+      args: ['--url={{inputs.parameters.dataset}}', '--directory={{inputs.parameters.directory}}']
+      image: 10.0.0.255:5000/pjh/kf-dataset:1.0
+      volumeMounts:
+      - {mountPath: '{{inputs.parameters.directory}}', name: volume-creation}
+    inputs:
+      parameters:
+      - {name: dataset}
+      - {name: directory}
+      - {name: volume-creation-name}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.6
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+    volumes:
+    - name: volume-creation
+      persistentVolumeClaim: {claimName: '{{inputs.parameters.volume-creation-name}}'}
+  - name: example
+    inputs:
+      parameters:
+      - {name: batch_size}
+      - {name: dataset}
+      - {name: directory}
+      - {name: epochs}
+      - {name: learning_rate}
+      - {name: log_step}
+      - {name: save_step}
+    dag:
+      tasks:
+      - name: dataset-download
+        template: dataset-download
+        dependencies: [volume-creation]
+        arguments:
+          parameters:
+          - {name: dataset, value: '{{inputs.parameters.dataset}}'}
+          - {name: directory, value: '{{inputs.parameters.directory}}'}
+          - {name: volume-creation-name, value: '{{tasks.volume-creation.outputs.parameters.volume-creation-name}}'}
+      - name: serving
+        template: serving
+        dependencies: [training-model, volume-creation]
+        arguments:
+          parameters:
+          - {name: directory, value: '{{inputs.parameters.directory}}'}
+          - {name: volume-creation-name, value: '{{tasks.volume-creation.outputs.parameters.volume-creation-name}}'}
+      - name: training-model
+        template: training-model
+        dependencies: [dataset-download, volume-creation]
+        arguments:
+          parameters:
+          - {name: batch_size, value: '{{inputs.parameters.batch_size}}'}
+          - {name: directory, value: '{{inputs.parameters.directory}}'}
+          - {name: epochs, value: '{{inputs.parameters.epochs}}'}
+          - {name: learning_rate, value: '{{inputs.parameters.learning_rate}}'}
+          - {name: log_step, value: '{{inputs.parameters.log_step}}'}
+          - {name: save_step, value: '{{inputs.parameters.save_step}}'}
+          - {name: volume-creation-name, value: '{{tasks.volume-creation.outputs.parameters.volume-creation-name}}'}
+      - {name: volume-creation, template: volume-creation}
+  - name: serving
+    container:
+      args: ['--result={{inputs.parameters.directory}}/results', '--directory={{inputs.parameters.directory}}/models',
+        --model=model.pth.tar]
+      image: 10.0.0.255:5000/pjh/kf-webapp:1.0
+      volumeMounts:
+      - {mountPath: '{{inputs.parameters.directory}}', name: volume-creation}
+    inputs:
+      parameters:
+      - {name: directory}
+      - {name: volume-creation-name}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.6
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+    volumes:
+    - name: volume-creation
+      persistentVolumeClaim: {claimName: '{{inputs.parameters.volume-creation-name}}'}
+  - name: training-model
+    container:
+      args: ['--dir_data={{inputs.parameters.directory}}/dataset', '--dir_checkpoints={{inputs.parameters.directory}}/models',
+        '--batch_size={{inputs.parameters.batch_size}}', '--learning_rate={{inputs.parameters.learning_rate}}',
+        '--log_step={{inputs.parameters.log_step}}', '--save_step={{inputs.parameters.save_step}}',
+        '--epochs={{inputs.parameters.epochs}}']
+      image: 10.0.0.255:5000/pjh/kf-training:1.0
+      volumeMounts:
+      - {mountPath: '{{inputs.parameters.directory}}', name: volume-creation}
+    inputs:
+      parameters:
+      - {name: batch_size}
+      - {name: directory}
+      - {name: epochs}
+      - {name: learning_rate}
+      - {name: log_step}
+      - {name: save_step}
+      - {name: volume-creation-name}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.6
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+    volumes:
+    - name: volume-creation
+      persistentVolumeClaim: {claimName: '{{inputs.parameters.volume-creation-name}}'}
+  - name: volume-creation
+    resource:
+      action: create
+      manifest: |
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: '{{workflow.name}}-share'
+        spec:
+          accessModes:
+          - ReadWriteMany
+          resources:
+            requests:
+              storage: 20Gi
+    outputs:
+      parameters:
+      - name: volume-creation-manifest
+        valueFrom: {jsonPath: '{}'}
+      - name: volume-creation-name
+        valueFrom: {jsonPath: '{.metadata.name}'}
+      - name: volume-creation-size
+        valueFrom: {jsonPath: '{.status.capacity.storage}'}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.6
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+  arguments:
+    parameters:
+    - {name: dataset, value: 'https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2'}
+    - {name: directory, value: /mnt/kubeflow}
+    - {name: batch_size, value: '16'}
+    - {name: learning_rate, value: '0.001'}
+    - {name: log_step, value: '1'}
+    - {name: save_step, value: '1'}
+    - {name: epochs, value: '1'}
+  serviceAccountName: pipeline-runner

@@ -15,7 +15,7 @@ $ bash run-yaml.sh
 ### Application
 
 - It can execute without kubeflow since kubeflow pipeline's base is argo workflow. Some resource from kubeflow is need.    
-- The `argo_install.yaml` install to your cluster argo pipeline v2.4.3. 
+- The `./install/argo_install.yaml` install to your cluster argo pipeline v2.4.3. 
 - In `run-yaml.sh` there have some apply information of kubeflow pipeline-runner role, rolebinding, service account.       
 
 ```
@@ -26,6 +26,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubeflow/manifests/5b1256f19a
 
 - In `utils/`, `pipeline-sample.yaml` has information about kubeflow pipelines. It made by python package `kfp`.    
 - If you apply to your kfp, update your kfp yaml and edited `run-yaml.sh`'s last line.    
+- If your computer hasn't GPU, you should use `utils/pipeline-cpu.yaml`.
 
 ---------------------
 - This work was supported by Institute for Information & communications Technology Promotion(IITP) grant funded by the Korea government(MSIT) (No.2021-0-00281, Development of highly integrated operator resource deployment optimization technology to maximize performance efficiency of high-load complex machine learning workloads in a hybrid cloud environment)
